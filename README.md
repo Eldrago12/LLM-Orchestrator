@@ -59,7 +59,7 @@ Follow these steps to get the system running:
 2.  **Clone the Repository:**
     ```bash
     git clone https://github.com/Eldrago12/LLM-Orchestrator.git
-    cd AI_Orchestrator
+    cd LLM_Orchestrator
     ```
 
 3.  **Set Environment Variables:**
