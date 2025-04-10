@@ -171,7 +171,7 @@ The orchestrator and container architecture are designed with clarity in mind:
 
 ## Functionality
 
-The system is designed to correctly run containerized tasks based on LLM decisions (although the exact LLM interaction logic is within the orchestrator's code which wasn't fully provided). The workflow described above outlines how the system processes user requests by leveraging the LLM to choose the appropriate containerized service(s) to execute.
+The system is designed to correctly run containerized tasks based on LLM decisions. The workflow described above outlines how the system processes user requests by leveraging the LLM to choose the appropriate containerized service(s) to execute.
 
 ## Code Quality
 
