@@ -1,0 +1,2 @@
+GEMINI_API_KEY = "AIzaSyDdAo-exAfRAp3WFiAVt8d5PJU_rl6_p38"
+GROQ_API_KEY = "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"

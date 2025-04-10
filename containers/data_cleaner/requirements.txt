@@ -1,0 +1,2 @@
+pandas>=1.0.0 # Or your specific version needed by cleaner.py
+aio_pika>=9.0.0

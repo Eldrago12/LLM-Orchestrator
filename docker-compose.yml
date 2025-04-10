@@ -1,0 +1,98 @@
+version: "3.8"
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.9-management
+    ports:
+      - "5672:5672"
+      - "15672:15672" # Management UI
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+  redis: # <-- ADDED REDIS SERVICE
+    image: redis:7-alpine # Use a specific version, alpine is smaller
+    networks:
+      - app-network
+    ports:
+      - "6379:6379" # Optional: expose redis port for external debugging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+
+  orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY} # Ensure set in .env or environment
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - PYTHONUNBUFFERED=1
+      - FLASK_DEBUG=1
+      - REDIS_HOST=redis # Optional for development
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./orchestrator:/app # Mount code
+      - ./uploads:/app/uploads # Mount uploads directory
+
+  data_cleaner:
+    build:
+      context: ./containers/data_cleaner
+      dockerfile: Dockerfile
+    networks:
+      - app-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    # *** COMMAND RUNS THE CONSUMER SCRIPT ***
+    command: ["python", "/app/data_cleaner_consumer.py"]
+    volumes:
+      - ./containers/data_cleaner:/app # Mounts cleaner.py AND data_cleaner_consumer.py
+      - ./uploads:/app/uploads # Mount uploads for access
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+
+  sentiment_analyzer:
+    build:
+      context: ./containers/sentiment_analyzer
+      dockerfile: Dockerfile
+    networks:
+      - app-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    # *** COMMAND RUNS THE CONSUMER SCRIPT ***
+    command: ["python", "/app/sentiment_analyzer_consumer.py"]
+    volumes:
+      - ./containers/sentiment_analyzer:/app # Mounts analyzer.py AND sentiment_analyzer_consumer.py
+      # Optional cache volume
+      # - huggingface_cache:/root/.cache/huggingface
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      # Optional cache env vars
+      # - HF_HOME=/app/cache/huggingface
+
+networks:
+  app-network:
+    driver: bridge
+# volumes:
+#   huggingface_cache: # Define if used
