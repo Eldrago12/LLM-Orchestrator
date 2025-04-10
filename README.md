@@ -31,6 +31,10 @@ The system follows a microservices-like architecture where different functionali
 
 
 
+![diagram-export-4-10-2025-8_34_52-PM](https://github.com/user-attachments/assets/f7cf1795-a971-4dc2-8fd8-49390aaa7ef3)
+
+
+
 
 **Component Explanation:**
 
