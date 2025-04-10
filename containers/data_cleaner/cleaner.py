@@ -1,27 +1,17 @@
-# containers/data_cleaner/cleaner.py
-# Role: Performs data cleaning based on arguments passed via command line.
-# Called by: data_cleaner_consumer.py
-
 import os
 import pandas as pd
 import json
-import argparse # Takes command-line arguments
+import argparse
 import subprocess
 import logging
 
-# Configure logging for this script
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - CLEANER_SCRIPT - %(levelname)s - %(message)s')
 
 def clean_data(input_file, cleaning_instructions):
-    """
-    Cleans the CSV data based on specific instructions.
-    Returns the cleaned DataFrame or raises an error on failure.
-    """
     try:
         logging.info(f"Starting cleaning process for file: {input_file}")
         if not os.path.exists(input_file):
              logging.error(f"Input file not found at path: {input_file}")
-             # Raise specific error for the caller (consumer) to potentially handle
              raise FileNotFoundError(f"Input file not found at path: {input_file}")
 
         logging.info(f"File permissions: {subprocess.getoutput(f'ls -l {input_file}')}")
@@ -29,9 +19,8 @@ def clean_data(input_file, cleaning_instructions):
         logging.info(f"Read CSV. Original DataFrame shape: {df.shape}")
         logging.info(f"Received {len(cleaning_instructions)} cleaning instructions.")
 
-        original_dtypes = df.dtypes # Store original types for logging changes
+        original_dtypes = df.dtypes
 
-        # --- Apply Instructions ---
         if cleaning_instructions:
             logging.info("Applying specific cleaning instructions...")
             for i, instruction in enumerate(cleaning_instructions):
@@ -40,7 +29,6 @@ def clean_data(input_file, cleaning_instructions):
                 logging.info(f"Instruction {i+1}: action='{action}', params={parameters}")
 
                 try:
-                    # --- Action Implementations ---
                     if action == 'fill_na':
                         columns_to_fill = parameters.get('columns')
                         fill_value = parameters.get('value')
@@ -53,14 +41,13 @@ def clean_data(input_file, cleaning_instructions):
                         valid_columns = [col for col in columns_to_fill if col in df.columns]
                         if len(valid_columns) != len(columns_to_fill):
                              logging.warning(f"Some columns for fill_na not found: {set(columns_to_fill) - set(valid_columns)}")
-                        if not valid_columns: continue # Skip if no valid columns
+                        if not valid_columns: continue
 
                         if fill_value is not None:
-                            # Basic type conversion attempt for fill_value
                             try:
                                 if any(pd.api.types.is_numeric_dtype(df[col]) for col in valid_columns):
                                     fill_value = float(fill_value)
-                            except (ValueError, TypeError): pass # Keep original type if conversion fails
+                            except (ValueError, TypeError): pass
                             df[valid_columns] = df[valid_columns].fillna(fill_value)
                             logging.info(f"Filled NA in {valid_columns} with value: {fill_value}")
                         elif method in ['mean', 'median', 'mode']:
@@ -134,7 +121,6 @@ def clean_data(input_file, cleaning_instructions):
                         if not valid_columns: continue
 
                         for col in valid_columns:
-                             # Check if column is actually string-like before stripping
                              if pd.api.types.is_string_dtype(df[col]) or df[col].dtype == 'object':
                                  try:
                                      df[col] = df[col].astype(str).str.strip() # Ensure string type then strip
@@ -149,7 +135,6 @@ def clean_data(input_file, cleaning_instructions):
 
                 except Exception as action_error:
                      logging.error(f"Error during action '{action}': {action_error}. Skipping instruction.")
-                     # Decide if script should fail entirely or continue
 
         else:
              logging.info("No specific instructions. Applying basic cleaning (drop duplicates).")
@@ -157,30 +142,25 @@ def clean_data(input_file, cleaning_instructions):
              df.drop_duplicates(inplace=True)
              rows_dropped = initial_rows - len(df)
              logging.info(f"Dropped {rows_dropped} duplicate rows (basic cleaning).")
-
-        # --- Final Steps ---
         df.reset_index(drop=True, inplace=True)
         logging.info(f"Cleaning process finished. Final DataFrame shape: {df.shape}")
 
-        # Log dtype changes
         final_dtypes = df.dtypes
         changed_dtypes = {col: f"{original_dtypes.get(col)} -> {final_dtypes.get(col)}" for col in df.columns if original_dtypes.get(col) != final_dtypes.get(col)}
         if changed_dtypes: logging.info(f"Data types changed: {changed_dtypes}")
 
-        return df # Return the cleaned DataFrame
+        return df
 
-    # --- Error Handling for the whole function ---
     except FileNotFoundError as e:
         logging.error(f"Fatal Error: {e}")
-        raise # Re-raise for consumer to handle
+        raise
     except pd.errors.EmptyDataError:
         logging.error(f"Fatal Error: Input file {input_file} is empty.")
-        raise ValueError(f"Input file {input_file} is empty.") # Raise different error type
+        raise ValueError(f"Input file {input_file} is empty.")
     except Exception as e:
-        logging.exception(f"Fatal Error during data cleaning process: {str(e)}") # Log full traceback
-        raise # Re-raise unexpected errors
+        logging.exception(f"Fatal Error during data cleaning process: {str(e)}")
+        raise
 
-# --- Main Execution Block (for direct script call) ---
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Clean CSV data based on instructions passed as arguments.")
     parser.add_argument("--input_file", required=True, help="Path to the input CSV file.")
@@ -189,40 +169,35 @@ if __name__ == "__main__":
 
     logging.info("cleaner.py script executed directly.")
 
-    output_json = "" # Initialize output
-    exit_code = 0 # Default success
+    output_json = ""
+    exit_code = 0
 
     try:
-        # Load instructions from the JSON string argument
         cleaning_instructions_list = json.loads(args.cleaning_instructions)
         if not isinstance(cleaning_instructions_list, list):
              raise ValueError("Cleaning instructions must be a JSON list (array).")
 
-        # Perform cleaning by calling the function
         cleaned_df = clean_data(args.input_file, cleaning_instructions_list)
 
-        # Prepare successful JSON output
         output_json = cleaned_df.to_json(orient='records', date_format='iso')
         logging.info("Cleaning successful. Prepared JSON output.")
 
     except FileNotFoundError as e:
         logging.error(f"Script Error: {e}")
         output_json = json.dumps({"error": str(e)})
-        exit_code = 2 # Specific exit code for file not found
-    except ValueError as e: # Catch empty file error or bad JSON instructions
+        exit_code = 2
+    except ValueError as e:
          logging.error(f"Script Error: {e}")
          output_json = json.dumps({"error": str(e)})
-         exit_code = 3 # Specific exit code for value error
+         exit_code = 3
     except json.JSONDecodeError:
         logging.error("Script Error: Invalid JSON format for cleaning instructions argument.")
         output_json = json.dumps({"error": "Invalid JSON format for cleaning instructions"})
         exit_code = 3
     except Exception as e:
-        logging.exception("Script Error: An unexpected error occurred during main execution.") # Log traceback
+        logging.exception("Script Error: An unexpected error occurred during main execution.")
         output_json = json.dumps({"error": f"An unexpected error occurred in cleaner: {str(e)}"})
-        exit_code = 1 # General error exit code
+        exit_code = 1
     finally:
-        # Always print the result (either JSON data or error JSON) to stdout
         print(output_json)
-        # Exit with the appropriate code
         exit(exit_code)

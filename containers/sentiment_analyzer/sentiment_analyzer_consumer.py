@@ -1,6 +1,3 @@
-# containers/sentiment_analyzer/sentiment_analyzer_consumer.py
-# MODIFIED: To publish results back to results_queue
-
 import os
 import json
 import asyncio
@@ -13,14 +10,13 @@ from typing import Optional, Dict, Any, Union
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - ANALYZER_CONSUMER - %(levelname)s - %(message)s')
 QUEUE_NAME = "sentiment_analyzer_queue"
 ANALYZER_SCRIPT_PATH = "/app/analyzer.py"
-RESULTS_QUEUE_NAME = "results_queue" # Target queue for results
+RESULTS_QUEUE_NAME = "results_queue"
 
-# --- Result Publishing ---
 async def publish_result(channel: aio_pika.Channel, task_id: str, result: Optional[str] = None, error: Optional[str] = None):
     """Publishes the task result or error back to the results queue."""
     result_payload = {
         "task_id": task_id,
-        "result": result, # Should be the analysis string
+        "result": result,
         "error": error
     }
     try:
@@ -36,9 +32,7 @@ async def publish_result(channel: aio_pika.Channel, task_id: str, result: Option
     except Exception as e:
         logging.error(f"Failed to publish result/error for Task ID {task_id}: {e}")
 
-# (Keep run_analyzer_script function as before)
 def run_analyzer_script(input_text):
-    # ... (implementation from previous answer) ...
     logging.info(f"Executing analyzer script...")
     command = ["python", ANALYZER_SCRIPT_PATH]
     script_env = os.environ.copy(); script_env["INPUT_DATA"] = input_text
@@ -50,11 +44,10 @@ def run_analyzer_script(input_text):
             error_message = (result.stdout.strip().splitlines() or ["Unknown script error"])[0]
             raise RuntimeError(f"Analyzer script failed: {error_message}")
         logging.info("analyzer.py executed successfully.")
-        return result.stdout.strip() # Return result string
+        return result.stdout.strip()
     except subprocess.TimeoutExpired: raise TimeoutError("Analyzer script timed out.")
     except Exception as e: logging.exception("Error running analyzer subprocess."); raise
 
-# --- RabbitMQ Message Handling ---
 async def on_message(message: aio_pika.IncomingMessage, result_channel: aio_pika.Channel):
     """Processes message and publishes result."""
     task_id = None
@@ -66,23 +59,18 @@ async def on_message(message: aio_pika.IncomingMessage, result_channel: aio_pika
 
             input_data = task_payload.get("input_data")
             if not input_data: raise ValueError("Task missing 'input_data'")
-
-            # --- Execute Analysis ---
             analysis_result_string = run_analyzer_script(input_data)
             logging.info(f"Task ID {task_id} completed. Result: {analysis_result_string}")
 
-            # --- Publish Success Result ---
-            # Check if the result indicates an internal script error
             if "Error:" in analysis_result_string:
                  await publish_result(result_channel, task_id, error=analysis_result_string)
             else:
                  await publish_result(result_channel, task_id, result=analysis_result_string)
 
-    # --- Error Handling and Publishing Error Result ---
     except (json.JSONDecodeError, ValueError) as e:
         logging.error(f"Data/Message Error for Task ID {task_id or 'N/A'}: {e}. Discarding.")
         if task_id: await publish_result(result_channel, task_id, error=f"Bad task data: {e}")
-    except RuntimeError as e: # Script failed
+    except RuntimeError as e:
         logging.error(f"Script execution failed for Task ID {task_id}: {e}. Reporting error.")
         await publish_result(result_channel, task_id, error=str(e))
     except TimeoutError as e:
@@ -92,7 +80,6 @@ async def on_message(message: aio_pika.IncomingMessage, result_channel: aio_pika
         logging.exception(f"Unhandled error processing Task ID {task_id}. Reporting error.")
         if task_id: await publish_result(result_channel, task_id, error=f"Unhandled worker error: {e}")
 
-# --- Main Execution Loop ---
 async def main():
     logging.info(f"Analyzer Consumer starting. Listening on '{QUEUE_NAME}', publishing to '{RESULTS_QUEUE_NAME}'.")
     loop = asyncio.get_event_loop()
@@ -103,7 +90,7 @@ async def main():
             logging.info("Connected to RabbitMQ.")
             async with connection:
                 consume_channel = await connection.channel()
-                await consume_channel.set_qos(prefetch_count=5) # Allow concurrent analyses
+                await consume_channel.set_qos(prefetch_count=5)
                 consume_queue = await consume_channel.declare_queue(QUEUE_NAME, durable=True)
 
                 publish_channel = await connection.channel()
@@ -112,7 +99,6 @@ async def main():
                 logging.info(" [*] Waiting for analysis tasks...")
                 await consume_queue.consume(lambda msg: on_message(msg, publish_channel))
                 await asyncio.Future()
-        # (Keep connection error handling and retry loop as before)
         except aio_pika.exceptions.AMQPConnectionError as e: logging.error(f"RabbitMQ connection error: {e}. Retrying..."); await asyncio.sleep(10)
         except KeyboardInterrupt: logging.info("CTRL+C pressed. Shutting down."); break
         except Exception as e: logging.exception(f"Unexpected error in main loop."); await asyncio.sleep(15)

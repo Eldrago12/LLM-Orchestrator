@@ -53,8 +53,8 @@ Follow these steps to get the system running:
 
 2.  **Clone the Repository:**
     ```bash
-    git clone <repository_url>
-    cd <repository_directory>
+    git clone https://github.com/Eldrago12/LLM-Orchestrator.git
+    cd AI_Orchestrator
     ```
 
 3.  **Set Environment Variables:**
@@ -66,20 +66,27 @@ Follow these steps to get the system running:
 
 4.  **Build and Run the Containers:**
     Navigate to the root directory of the project (where the `docker-compose.yml` file is located) and run:
+
     ```bash
-    docker-compose up --build -d
+    docker-compose build
+    docker-compose up
     ```
+
     This command will build the Docker images for all the services and start them in detached mode.
 
 5.  **Using the CLI Tool:**
     Navigate to the directory containing `cli-tool.py` (likely the root of the repository) and run it with your request:
+
     ```bash
     python cli-tool.py "Clean this data" -f path/to/your/data.csv
     ```
+
     or for sentiment analysis:
+
     ```bash
     python cli-tool.py "Analyze the sentiment of this text: The product is amazing!"
     ```
+
     You can also specify the orchestrator URL, polling interval, and timeout using the `-u`, `-i`, and `-t` flags respectively.
 
 ## Workflow Explanation
